@@ -265,7 +265,12 @@ export class PluginBridgeClient {
 	 * Automatically reconnects on connection failure (one retry).
 	 */
 	async sendCommand(command: PluginBridgeCommand): Promise<PluginBridgeResponse> {
-		if (!this._available) {
+		// `_available` goes false whenever the socket drops — an editor restart, a
+		// plugin reload — and nothing sets it back except isAvailable(), which only
+		// runs on a status refresh. Without this retry the first call after the
+		// editor comes back reports the plugin as absent even though it is
+		// listening, and the caller is told to go install something already there.
+		if (!this._available && !(await this.isAvailable())) {
 			throw new PluginNotAvailableError();
 		}
 
