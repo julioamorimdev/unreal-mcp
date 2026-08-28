@@ -26,6 +26,7 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Misc/PackageName.h"
+#include "SubobjectData.h"
 #include "SubobjectDataHandle.h"
 #include "SubobjectDataSubsystem.h"
 #include "UnrealMCPBridgeModule.h"
@@ -631,12 +632,26 @@ namespace
 			Subsystem->RenameSubobject(NewHandle, FText::FromString(RequestedName));
 		}
 
+		// Report the name the editor actually assigned, read before the compile
+		// can invalidate the handle. With no component_name the editor derives one
+		// from the class -- SphereComponent becomes "Sphere" -- and a requested
+		// name may be adjusted to stay unique. Echoing the class name instead
+		// would hand callers an identifier the Blueprint does not contain.
+		FString ActualName;
+		if (const FSubobjectData* SubobjectData = NewHandle.GetData())
+		{
+			ActualName = SubobjectData->GetVariableName().ToString();
+		}
+		if (ActualName.IsEmpty())
+		{
+			ActualName = RequestedName.IsEmpty() ? ComponentClass->GetName() : RequestedName;
+		}
+
 		CompileAndSave(Blueprint);
 
 		const TSharedRef<FJsonObject> Data = MakeShared<FJsonObject>();
 		Data->SetBoolField(TEXT("success"), true);
-		Data->SetStringField(TEXT("component"),
-			RequestedName.IsEmpty() ? ComponentClass->GetName() : RequestedName);
+		Data->SetStringField(TEXT("component"), ActualName);
 		Data->SetStringField(TEXT("component_class"), ComponentClass->GetName());
 		return MakeSuccess(Data);
 	}
