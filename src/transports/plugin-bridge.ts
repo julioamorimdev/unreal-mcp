@@ -89,13 +89,23 @@ export class PluginBridgeClient {
 		}
 
 		await new Promise<void>((resolve, reject) => {
+			let connected = false;
 			const socket = createConnection({ host: this.host, port: this.port }, () => {
+				connected = true;
+				// The 3s budget below is meant to bound *connecting*. Node's
+				// setTimeout is an idle timer that stays armed for the life of the
+				// socket, so leaving it set would tear down a perfectly healthy
+				// connection 3s after the last message and flip _available to false.
+				socket.setTimeout(0);
 				this.socket = socket;
 				this.receiveBuffer = Buffer.alloc(0);
 				resolve();
 			});
 			socket.setTimeout(3000);
 			socket.on("timeout", () => {
+				if (connected) {
+					return;
+				}
 				socket.destroy();
 				reject(new Error("Connection timeout"));
 			});
